@@ -1,7 +1,9 @@
+import { ServiceDefinition } from "./generate";
+
 export const serviceTemplate = (
   service: string
 ) => `export class ${service}ServerStreaming {
-  server: WebSocketServer;
+  server?: WebSocketServer;
   impl: I${service}ServiceImpl;
   debug: boolean;
 
@@ -10,7 +12,7 @@ export const serviceTemplate = (
     this.debug = debug;
   }
 
-  handleMessage(ws: WebSocket, method: keyof typeof messageMetadata) {
+  handleMessage(ws: WebSocketService, method: keyof typeof messageMetadata) {
     ws.on("message", async (data) => {
       if (this.debug) {
         console.log(\`Received message from client\`);
@@ -42,7 +44,7 @@ export const serviceTemplate = (
     };
   }
 
-  handleServerStreaming(ws: WebSocket, method: keyof typeof messageMetadata) {
+  handleServerStreaming(ws: WebSocketService, method: keyof typeof messageMetadata) {
     ws.on("message", async (data) => {
       const binary = new Uint8Array(data as ArrayBuffer);
       const message = messageMetadata[method].MessageClass.decode(binary);
@@ -66,7 +68,7 @@ export const serviceTemplate = (
     };
   }
 
-  handleClientStreaming(ws: WebSocket, method: keyof typeof messageMetadata) {
+  handleClientStreaming(ws: WebSocketService, method: keyof typeof messageMetadata) {
     let iterableResolve: (value: any) => void;
     let iterableReject: (reason?: any) => void;
     let iterablePromise = new Promise<any>((resolve, reject) => {
@@ -101,6 +103,7 @@ export const serviceTemplate = (
         if (result === null) {
           return;
         }
+        yield result;
       }
     }
 
@@ -111,7 +114,7 @@ export const serviceTemplate = (
   }
 
   handleBidirectionalStreaming(
-    ws: WebSocket,
+    ws: WebSocketService,
     method: keyof typeof messageMetadata
   ) {
     let iterableResolve: (value: any) => void;
@@ -200,3 +203,301 @@ export const serviceTemplate = (
     });
   }
 }`;
+
+export const internalClientTemplate = `class InternalClientStreaming {
+  url: string;
+  WS: {
+    [key in string]?: WebSocket
+  } = {};
+  debug: boolean;
+
+  constructor(url: string, debug: boolean = false) {
+    this.url = url;
+    this.debug = debug;
+  }
+
+  destroy() {
+    for (const key in this.WS) {
+      this.WS[key]?.close();
+    }
+  }
+
+  sendWhenSocketReady(method: keyof typeof messageMetadata, request: {}) {
+    const binary =
+      messageMetadata[method].MessageClass.encode(request).finish();
+
+    if (!this.WS[method]) {
+      this.WS[method] = new WebSocket(this.url, method);
+      this.WS[method]!.binaryType = "arraybuffer";
+    }
+    if (this.WS[method]!.readyState === WebSocket.OPEN) {
+      this.WS[method]!.send(binary);
+    } else {
+      this.WS[method]!.onopen = () => {
+        if (!this.WS[method]) {
+          console.error(method + "WS is undefined in onopen");
+          return;
+        }
+        this.WS[method]!.send(binary);
+      };
+    }
+  }
+
+  startAsyncIterableLoopWhenSocketReady(
+    method: keyof typeof messageMetadata,
+    clientIterable: AsyncIterable<{}>
+  ) {
+    const main = async () => {
+      for await (const request of clientIterable) {
+        const binary =
+          messageMetadata[method].MessageClass.encode(request).finish();
+        if (!this.WS[method]) {
+          console.error("WS." + method + " is undefined");
+          return;
+        }
+        this.WS[method]!.send(binary);
+      }
+    };
+
+    if (!this.WS[method]) {
+      this.WS[method] = new WebSocket(this.url, method);
+      this.WS[method]!.binaryType = "arraybuffer";
+    }
+
+    if (this.WS[method]!.readyState === WebSocket.OPEN) {
+      main();
+    } else {
+      this.WS[method]!.onopen = () => {
+        main();
+      };
+    }
+  }
+
+  handleMessage(
+    method: keyof typeof messageMetadata,
+    request: {}
+  ): Promise<{}> {
+    this.sendWhenSocketReady(method, request);
+
+    let messageResolve: (value: {}) => void;
+    let messageReject: (reason?: any) => void;
+
+    let messagePromiseResolveCount = 0;
+
+    let messagePromise = new Promise<{}>((resolve, reject) => {
+      messageResolve = resolve;
+      messageReject = reject;
+    });
+
+    this.WS[method]!.onmessage = (data) => {
+      const binary = new Uint8Array(data.data as ArrayBuffer);
+      const message = messageMetadata[method].ReplyClass.decode(binary);
+
+      if (this.debug) {
+        console.log("Received a message from server", message);
+      }
+
+      if (messagePromiseResolveCount === 0) {
+        messageResolve(message as {});
+        messagePromiseResolveCount++;
+      } else {
+        console.error("messagePromiseResolveCount > 0");
+      }
+    };
+
+    this.WS[method]!.onclose = () => {
+      messageReject();
+    };
+
+    this.WS[method]!.onerror = () => {
+      messageReject();
+    };
+
+    return messagePromise;
+  }
+
+  handleServerStreaming(
+    method: keyof typeof messageMetadata,
+    request: {}
+  ): AsyncIterable<{}> {
+    this.sendWhenSocketReady(method, request);
+
+    let serverStreamResolve: (value: {}) => void;
+    let serverStreamReject: (reason?: any) => void;
+
+    let serverStreamPromise = new Promise<{}>((resolve, reject) => {
+      serverStreamResolve = resolve;
+      serverStreamReject = reject;
+    });
+
+    this.WS[method]!.onmessage = (data) => {
+      const binary = new Uint8Array(data.data as ArrayBuffer);
+      const message = messageMetadata[method].ReplyClass.decode(binary);
+      serverStreamResolve(message);
+    };
+
+    this.WS[method]!.onclose = () => {
+      serverStreamReject();
+    };
+
+    this.WS[method]!.onerror = () => {
+      serverStreamReject();
+    };
+
+    async function* asyncIterable() {
+      while (true) {
+        const result = await serverStreamPromise;
+        yield result;
+        serverStreamPromise = new Promise<{}>((resolve, reject) => {
+          serverStreamResolve = resolve;
+          serverStreamReject = reject;
+        });
+      }
+    }
+
+    return asyncIterable();
+  }
+
+  handleClientStreaming(
+    method: keyof typeof messageMetadata,
+    clientIterable: AsyncIterable<{}>
+  ) {
+    this.startAsyncIterableLoopWhenSocketReady(method, clientIterable);
+
+    let clientStreamResolve: (value: {}) => void;
+    let clientStreamReject: (reason?: any) => void;
+
+    let clientStreamResolveCount = 0;
+
+    let clientStream = new Promise<{}>((resolve, reject) => {
+      clientStreamResolve = resolve;
+      clientStreamReject = reject;
+    });
+
+    this.WS[method]!.onmessage = (data) => {
+      const binary = new Uint8Array(data.data as ArrayBuffer);
+      const message = messageMetadata[method].ReplyClass.decode(binary);
+      if (clientStreamResolveCount === 0) {
+        clientStreamResolve(message);
+        clientStreamResolveCount++;
+      } else {
+        console.error("clientStreamResolveCount > 0");
+      }
+    };
+
+    this.WS[method]!.onclose = () => {
+      clientStreamReject();
+    };
+
+    this.WS[method]!.onerror = () => {
+      clientStreamReject();
+    };
+
+    return clientStream;
+  }
+
+  handleBidirectionalStreaming(
+    method: keyof typeof messageMetadata,
+    clientIterable: AsyncIterable<{}>
+  ) {
+    this.startAsyncIterableLoopWhenSocketReady(method, clientIterable);
+
+    let bidiStreamResolve: (value: {}) => void;
+    let bidiStreamReject: (reason?: any) => void;
+
+    let bidiStreamPromise = new Promise<{}>((resolve, reject) => {
+      bidiStreamResolve = resolve;
+      bidiStreamReject = reject;
+    });
+
+    this.WS[method]!.onmessage = (data) => {
+      const binary = new Uint8Array(data.data as ArrayBuffer);
+      const message = messageMetadata[method].ReplyClass.decode(binary);
+      bidiStreamResolve(message);
+    };
+
+    this.WS[method]!.onclose = () => {
+      bidiStreamReject();
+    };
+
+    this.WS[method]!.onerror = () => {
+      bidiStreamReject();
+    };
+
+    async function* asyncIterable() {
+      while (true) {
+        const result = await bidiStreamPromise;
+        yield result;
+        bidiStreamPromise = new Promise<{}>((resolve, reject) => {
+          bidiStreamResolve = resolve;
+          bidiStreamReject = reject;
+        });
+      }
+    }
+
+    return asyncIterable();
+  }
+}`;
+
+export const clientTemplate = (
+  serviceName: string,
+  methodMetadata: Record<string, ServiceDefinition>
+) => `
+export class ${serviceName}ClientStreaming {
+  url: string;
+  debug: boolean;
+  internalClient: InternalClientStreaming;
+
+  constructor(url: string, debug: boolean = false) {
+    this.url = url;
+    this.debug = debug;
+    this.internalClient = new InternalClientStreaming(url, debug);
+  }
+
+  destroy() {
+    this.internalClient.destroy();
+  }
+
+  ${Object.entries(methodMetadata)
+    .map(([methodName, method]) => {
+      if (method.requestStream && method.responseStream) {
+        return `${methodName}(
+        clientIterable: AsyncIterable<${method.MessageClass}>
+      ): AsyncIterable<${method.ReplyClass}> {
+        return this.internalClient.handleBidirectionalStreaming(
+          "${methodName}",
+          clientIterable
+        ) as AsyncIterable<${method.ReplyClass}>;
+      }`;
+      } else if (method.requestStream) {
+        return `${methodName}(
+        clientIterable: AsyncIterable<${method.MessageClass}>
+      ): Promise<${method.ReplyClass}> {
+        return this.internalClient.handleClientStreaming(
+          "${methodName}",
+          clientIterable
+        ) as Promise<${method.ReplyClass}>;
+      }`;
+      } else if (method.responseStream) {
+        return `${methodName}(
+        request: ${method.MessageClass}
+      ): AsyncIterable<${method.ReplyClass}> {
+        return this.internalClient.handleServerStreaming(
+          "${methodName}",
+          request
+        ) as AsyncIterable<${method.ReplyClass}>;
+      }`;
+      } else {
+        return `${methodName}(
+        request: ${method.MessageClass}
+      ): Promise<${method.ReplyClass}> {
+        return this.internalClient.handleMessage(
+          "${methodName}",
+          request
+        ) as Promise<${method.ReplyClass}>;
+      }`;
+      }
+    })
+    .join("\n\n")}
+}
+`;

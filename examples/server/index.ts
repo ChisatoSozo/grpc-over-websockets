@@ -13,6 +13,7 @@ const server = new GreeterServerStreaming(
     SayHelloServerStream: async function* (message) {
       const response = "Hello, " + message.name + " " + message.lastName;
       for (let i = 0; i < 10; i++) {
+        console.log("sending message");
         yield {
           message: response,
         };
