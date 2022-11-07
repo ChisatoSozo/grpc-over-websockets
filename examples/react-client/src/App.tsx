@@ -7,7 +7,7 @@ class GreeterClientStreaming {
   SayHelloWS: WebSocket | undefined;
   SayHelloServerStreamWS: WebSocket | undefined;
   SayHelloClientStreamWS: WebSocket | undefined;
-  SayHelloBidirectionalStreamWS: WebSocket | undefined;
+  SayHelloBidiStreamWS: WebSocket | undefined;
   debug: boolean;
 
   constructor(url: string, debug: boolean = false) {
@@ -25,8 +25,8 @@ class GreeterClientStreaming {
     if (this.SayHelloClientStreamWS) {
       this.SayHelloClientStreamWS.close();
     }
-    if (this.SayHelloBidirectionalStreamWS) {
-      this.SayHelloBidirectionalStreamWS.close();
+    if (this.SayHelloBidiStreamWS) {
+      this.SayHelloBidiStreamWS.close();
     }
   }
 
@@ -218,70 +218,67 @@ class GreeterClientStreaming {
     return SayHelloClientStreamPromise;
   }
 
-  SayHelloBidirectionalStream(
-    clientIterable: AsyncIterable<ExampleProtos.HelloRequest>
-  ): AsyncIterable<ExampleProtos.HelloReply> {
+  SayHelloBidiStream(
+    clientIterable: AsyncIterable<ExampleProtos.IHelloRequest>
+  ): AsyncIterable<ExampleProtos.IHelloReply> {
     const main = async () => {
       for await (const request of clientIterable) {
         const binary = ExampleProtos.HelloRequest.encode(request).finish();
-        if (!this.SayHelloBidirectionalStreamWS) {
-          console.error("SayHelloBidirectionalStreamWS is undefined");
+        if (!this.SayHelloBidiStreamWS) {
+          console.error("SayHelloBidiStreamWS is undefined");
           return;
         }
-        this.SayHelloBidirectionalStreamWS.send(binary);
+        this.SayHelloBidiStreamWS.send(binary);
       }
     };
 
-    if (!this.SayHelloBidirectionalStreamWS) {
-      this.SayHelloBidirectionalStreamWS = new WebSocket(
-        this.url,
-        "SayHelloBidirectionalStream"
-      );
-      this.SayHelloBidirectionalStreamWS.binaryType = "arraybuffer";
+    if (!this.SayHelloBidiStreamWS) {
+      this.SayHelloBidiStreamWS = new WebSocket(this.url, "SayHelloBidiStream");
+      this.SayHelloBidiStreamWS.binaryType = "arraybuffer";
     }
 
-    if (this.SayHelloBidirectionalStreamWS.readyState === WebSocket.OPEN) {
+    if (this.SayHelloBidiStreamWS.readyState === WebSocket.OPEN) {
       main();
     } else {
-      this.SayHelloBidirectionalStreamWS.onopen = () => {
+      this.SayHelloBidiStreamWS.onopen = () => {
         main();
       };
     }
 
-    let SayHelloBidirectionalStreamResolve: (
-      value: ExampleProtos.HelloReply
-    ) => void;
-    let SayHelloBidirectionalStreamReject: (reason?: any) => void;
+    let SayHelloBidiStreamResolve: (value: ExampleProtos.HelloReply) => void;
+    let SayHelloBidiStreamReject: (reason?: any) => void;
 
-    let SayHelloBidirectionalStreamPromise =
-      new Promise<ExampleProtos.HelloReply>((resolve, reject) => {
-        SayHelloBidirectionalStreamResolve = resolve;
-        SayHelloBidirectionalStreamReject = reject;
-      });
+    let SayHelloBidiStreamPromise = new Promise<ExampleProtos.HelloReply>(
+      (resolve, reject) => {
+        SayHelloBidiStreamResolve = resolve;
+        SayHelloBidiStreamReject = reject;
+      }
+    );
 
-    this.SayHelloBidirectionalStreamWS.onmessage = (data) => {
+    this.SayHelloBidiStreamWS.onmessage = (data) => {
       const binary = new Uint8Array(data.data as ArrayBuffer);
       const message = ExampleProtos.HelloReply.decode(binary);
-      SayHelloBidirectionalStreamResolve(message);
+      SayHelloBidiStreamResolve(message);
     };
 
-    this.SayHelloBidirectionalStreamWS.onclose = () => {
-      SayHelloBidirectionalStreamReject();
+    this.SayHelloBidiStreamWS.onclose = () => {
+      SayHelloBidiStreamReject();
     };
 
-    this.SayHelloBidirectionalStreamWS.onerror = () => {
-      SayHelloBidirectionalStreamReject();
+    this.SayHelloBidiStreamWS.onerror = () => {
+      SayHelloBidiStreamReject();
     };
 
     async function* asyncIterable() {
       while (true) {
-        const result = await SayHelloBidirectionalStreamPromise;
+        const result = await SayHelloBidiStreamPromise;
         yield result;
-        SayHelloBidirectionalStreamPromise =
-          new Promise<ExampleProtos.HelloReply>((resolve, reject) => {
-            SayHelloBidirectionalStreamResolve = resolve;
-            SayHelloBidirectionalStreamReject = reject;
-          });
+        SayHelloBidiStreamPromise = new Promise<ExampleProtos.HelloReply>(
+          (resolve, reject) => {
+            SayHelloBidiStreamResolve = resolve;
+            SayHelloBidiStreamReject = reject;
+          }
+        );
       }
     }
 
@@ -309,14 +306,22 @@ function App() {
       return;
     }
 
-    const serverIterable = client.SayHelloServerStream({
-      name,
-      lastName: "Jhonson",
-    });
+    const clientIterable = (async function* () {
+      for (let i = 0; i < 10; i++) {
+        yield { name, lastName: "lastName" };
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    })();
+
+    const serverIterable = client.SayHelloBidiStream(clientIterable);
 
     const main = async () => {
       for await (const reply of serverIterable) {
-        setReplies((replies) => [...replies, reply.message]);
+        const { message } = reply;
+        if (!message) {
+          continue;
+        }
+        setReplies((replies) => [...replies, message]);
       }
     };
 

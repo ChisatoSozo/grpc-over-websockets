@@ -1,6 +1,12 @@
+import prettier from "prettier";
 import { pbjs, pbts } from "protobufjs-cli";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
+import { serviceTemplate } from "./serverTemplates";
+
+const capitalize = (s: string) => {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
 
 const pbjsPromise = (args: string[]): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -28,8 +34,6 @@ const pbtsPromise = (args: string[]): Promise<string> => {
 const compile = async (outFile: string, protoFiles: string[]) => {
   const fileRoot = outFile.replace(/\.js$/, "");
 
-  let outTS = "";
-
   for (const protoFile of protoFiles) {
     console.log(`Processing ${protoFile}`);
     await pbjsPromise([
@@ -43,18 +47,65 @@ const compile = async (outFile: string, protoFiles: string[]) => {
     ]);
     await pbtsPromise(["-o", `${fileRoot}.pbjs.d.ts`, `${fileRoot}.pbjs.js`]);
     const result = JSON.parse(await pbjsPromise(["-t", "json", protoFile]));
-
+    console.log(result);
     const modules = result.nested;
+
+    let outTS = "";
+    let messageMetadata = "const messageMetadata = {\n";
+
+    outTS += `import { WebSocket, WebSocketServer } from "ws";`;
+    for (const module in modules) {
+      const capitalizedModule = capitalize(module);
+      outTS += `import { ${module} as ${capitalizedModule} } from "./compiled.pbjs";`;
+    }
     for (const module in modules) {
       const compiledObjects = modules[module].nested;
-      for (let compiledObject of compiledObjects) {
+      const capitalizedModule = capitalize(module);
+
+      for (let compiledObjectName in compiledObjects) {
+        const compiledObject = compiledObjects[compiledObjectName];
         if (compiledObject.methods) {
-          //it's a service
-          //build impl interface
+          let ImplBody = ``;
+          for (let methodName in compiledObject.methods) {
+            const method = compiledObject.methods[methodName];
+
+            let methodMetadataBody = "";
+            methodMetadataBody += `requestStream: ${!!method.requestStream},\n`;
+            methodMetadataBody += `responseStream: ${!!method.responseStream},\n`;
+            methodMetadataBody += `MessageClass: ${capitalizedModule}.${method.requestType},\n`;
+            methodMetadataBody += `ReplyClass: ${capitalizedModule}.${method.responseType},\n`;
+
+            messageMetadata += `
+            ${methodName}: {
+              ${methodMetadataBody}
+            },
+            `;
+
+            if (!method.requestStream && !method.responseStream) {
+              ImplBody += `${methodName}: (message: ${capitalizedModule}.I${method.requestType}) => ${capitalizedModule}.I${method.responseType};\n`;
+            } else if (method.requestStream && !method.responseStream) {
+              ImplBody += `${methodName}: (message: AsyncIterable<${capitalizedModule}.I${method.requestType}>) => ${capitalizedModule}.I${method.responseType};\n`;
+            } else if (!method.requestStream && method.responseStream) {
+              ImplBody += `${methodName}: (message: ${capitalizedModule}.I${method.requestType}) => AsyncIterable<${capitalizedModule}.I${method.responseType}>;\n`;
+            } else if (method.requestStream && method.responseStream) {
+              ImplBody += `${methodName}: (message: AsyncIterable<${capitalizedModule}.I${method.requestType}>) => AsyncIterable<${capitalizedModule}.I${method.responseType}>;\n`;
+            }
+          }
+          outTS += `export interface I${compiledObjectName}ServiceImpl {${ImplBody}}\n`;
+          outTS += serviceTemplate(compiledObjectName);
         }
       }
     }
-    console.log(result);
+
+    messageMetadata += "};\n";
+    outTS += `${messageMetadata};\n`;
+
+    //write file
+    const fs = require("fs");
+    const formetted = prettier.format(outTS, {
+      parser: "typescript",
+    });
+    fs.writeFileSync(`${fileRoot}.def.ts`, formetted);
   }
 };
 
