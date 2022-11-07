@@ -1,0 +1,52 @@
+{
+  "nested": {
+    "example": {
+      "nested": {
+        "Greeter": {
+          "methods": {
+            "SayHello": {
+              "requestType": "HelloRequest",
+              "responseType": "HelloReply"
+            },
+            "SayHelloServerStream": {
+              "requestType": "HelloRequest",
+              "responseType": "HelloReply",
+              "responseStream": true
+            },
+            "SayHelloClientStream": {
+              "requestType": "HelloRequest",
+              "requestStream": true,
+              "responseType": "HelloReply"
+            },
+            "SayHelloBidiStream": {
+              "requestType": "HelloRequest",
+              "requestStream": true,
+              "responseType": "HelloReply",
+              "responseStream": true
+            }
+          }
+        },
+        "HelloRequest": {
+          "fields": {
+            "name": {
+              "type": "string",
+              "id": 1
+            },
+            "lastName": {
+              "type": "string",
+              "id": 2
+            }
+          }
+        },
+        "HelloReply": {
+          "fields": {
+            "message": {
+              "type": "string",
+              "id": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}
