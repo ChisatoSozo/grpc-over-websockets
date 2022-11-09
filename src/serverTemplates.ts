@@ -12,6 +12,12 @@ export const serviceTemplate = (
     this.debug = debug;
   }
 
+  destroy() {
+    if(this.server){
+      this.server.close();
+    }
+  }
+
   handleMessage(ws: WebSocketService, method: keyof typeof messageMetadata) {
     ws.on("message", async (data) => {
       if (this.debug) {
@@ -36,11 +42,10 @@ export const serviceTemplate = (
       ws.send(reply);
     });
     ws.on("close", () => {
-      console.log("the client has d/c");
+
     });
     // handling client connection error
     ws.onerror = function () {
-      console.log("Some Error occurred");
     };
   }
 
@@ -58,13 +63,15 @@ export const serviceTemplate = (
           messageMetadata[method].ReplyClass.encode(reply).finish();
         ws.send(replyBinary);
       }
+
+      ws.close();
     });
     ws.on("close", () => {
-      console.log("the client has d/c");
+
     });
     // handling client connection error
     ws.onerror = function () {
-      console.log("Some Error occurred");
+
     };
   }
 
@@ -87,13 +94,11 @@ export const serviceTemplate = (
     });
 
     ws.on("close", () => {
-      console.log("the client has d/c");
       iterableResolve(null);
     });
 
     // handling client connection error
     ws.onerror = function () {
-      console.log("Some Error occurred");
       iterableReject();
     };
 
@@ -135,13 +140,11 @@ export const serviceTemplate = (
     });
 
     ws.on("close", () => {
-      console.log("the client has d/c");
       iterableResolve(null);
     });
 
     // handling client connection error
     ws.onerror = function () {
-      console.log("Some Error occurred");
       iterableReject();
     };
 
@@ -257,6 +260,7 @@ export const internalClientTemplate = `class InternalClientStreaming {
         }
         this.WS[method]!.send(binary);
       }
+      this.WS[method]!.close();
     };
 
     if (!this.WS[method]) {
@@ -325,7 +329,7 @@ export const internalClientTemplate = `class InternalClientStreaming {
     let serverStreamResolve: (value: {}) => void;
     let serverStreamReject: (reason?: any) => void;
 
-    let serverStreamPromise = new Promise<{}>((resolve, reject) => {
+    let serverStreamPromise = new Promise<{} | undefined>((resolve, reject) => {
       serverStreamResolve = resolve;
       serverStreamReject = reject;
     });
@@ -337,7 +341,7 @@ export const internalClientTemplate = `class InternalClientStreaming {
     };
 
     this.WS[method]!.onclose = () => {
-      serverStreamReject();
+      serverStreamResolve(undefined);
     };
 
     this.WS[method]!.onerror = () => {
@@ -347,6 +351,9 @@ export const internalClientTemplate = `class InternalClientStreaming {
     async function* asyncIterable() {
       while (true) {
         const result = await serverStreamPromise;
+        if(!result){
+          return;
+        }
         yield result;
         serverStreamPromise = new Promise<{}>((resolve, reject) => {
           serverStreamResolve = resolve;
@@ -405,7 +412,7 @@ export const internalClientTemplate = `class InternalClientStreaming {
     let bidiStreamResolve: (value: {}) => void;
     let bidiStreamReject: (reason?: any) => void;
 
-    let bidiStreamPromise = new Promise<{}>((resolve, reject) => {
+    let bidiStreamPromise = new Promise<{} | undefined>((resolve, reject) => {
       bidiStreamResolve = resolve;
       bidiStreamReject = reject;
     });
@@ -417,7 +424,7 @@ export const internalClientTemplate = `class InternalClientStreaming {
     };
 
     this.WS[method]!.onclose = () => {
-      bidiStreamReject();
+      bidiStreamResolve(undefined);
     };
 
     this.WS[method]!.onerror = () => {
@@ -427,6 +434,9 @@ export const internalClientTemplate = `class InternalClientStreaming {
     async function* asyncIterable() {
       while (true) {
         const result = await bidiStreamPromise;
+        if(!result){
+          return;
+        }
         yield result;
         bidiStreamPromise = new Promise<{}>((resolve, reject) => {
           bidiStreamResolve = resolve;

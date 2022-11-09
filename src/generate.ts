@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 import fs from "fs";
 import { pbjs, pbts } from "protobufjs-cli";
 import * as ts from "typescript";
@@ -64,8 +66,6 @@ function compileDTS(fileName: string): void {
   // Loop through all the input files
   fileNames.forEach((file) => {
     const dts = file.replace(".ts", ".d.ts");
-    console.log("Writing", dts);
-    console.log(createdFiles);
     fs.writeFileSync(dts, createdFiles[dts]);
   });
 }
@@ -108,7 +108,10 @@ function compileJS(fileName: string): void {
   });
 
   let exitCode = emitResult.emitSkipped ? 1 : 0;
-  console.log(`Process exiting with code '${exitCode}'.`);
+  if (exitCode) {
+    console.log(`Process exiting with code '${exitCode}'.`);
+  }
+  console.log(`Process successful`);
 }
 
 const compile = async (outFile: string, protoFiles: string[]) => {
@@ -127,7 +130,6 @@ const compile = async (outFile: string, protoFiles: string[]) => {
     ]);
     await pbtsPromise(["-o", `${fileRoot}.pbjs.d.ts`, `${fileRoot}.pbjs.js`]);
     const result = JSON.parse(await pbjsPromise(["-t", "json", protoFile]));
-    console.log(result);
     const modules = result.nested;
 
     let outTS = "";
