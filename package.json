@@ -1,17 +1,21 @@
 {
   "name": "grpc-over-websocket",
-  "version": "1.0.0",
+  "version": "0.0.2",
   "main": "dist/generate.js",
   "license": "MIT",
   "bin": {
     "grpc-over-websockets-gen": "node dist/generate.js"
   },
+  "files": [
+    "dist/*"
+  ],
   "scripts": {
     "test": "npm-run-all test:*",
     "test:generate": "node dist/generate.js -o src/tests/protos/compiled.js src/tests/test.proto",
     "test:jest": "jest",
     "build": "rollup -c --bundleConfigAsCjs",
-    "setup": "npm run build && node dist/generate.js -o examples/react-client/src/client-protos/compiled.js -o examples/server/server-protos/compiled.js examples/protos/example.proto"
+    "setup": "npm run build && node dist/generate.js -o examples/react-client/src/client-protos/compiled.js -o examples/server/server-protos/compiled.js examples/protos/example.proto",
+    "publish": "npm run build && npm version patch && npm publish"
   },
   "devDependencies": {
     "@rollup/plugin-typescript": "^9.0.2",
