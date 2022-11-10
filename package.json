@@ -15,7 +15,7 @@
     "test:jest": "jest",
     "build": "rollup -c --bundleConfigAsCjs",
     "setup": "npm run build && node dist/generate.js -o examples/react-client/src/client-protos/compiled.js -o examples/server/server-protos/compiled.js examples/protos/example.proto",
-    "push": "git add . && git commit -m 'patch' && npm version patch && npm run build && git push && npm publish"
+    "push": "npm version patch && npm run build && git push && npm publish"
   },
   "devDependencies": {
     "@rollup/plugin-typescript": "^9.0.2",
