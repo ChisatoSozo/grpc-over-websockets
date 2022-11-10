@@ -141,13 +141,9 @@ describe("End to end test", () => {
   });
 
   test("server can receive client stream in 100ms", async () => {
-    let clientIterableResolve: () => void;
+    const { serverMessage, sendStream } = client.SayHelloClientStream();
 
-    let promise = new Promise<void>(
-      (resolve) => (clientIterableResolve = resolve)
-    );
-
-    async function* clientIterable() {
+    const sendMain = async () => {
       let keepGoing = true;
       const startTime = new Date().valueOf();
 
@@ -157,21 +153,24 @@ describe("End to end test", () => {
           keepGoing = false;
         }
 
-        yield {};
+        sendStream.send({});
 
         await sleep0();
       }
+      sendStream.close();
+      await sleep0();
+    };
 
-      clientIterableResolve();
-    }
+    const reply = await serverMessage;
+    await sendMain();
 
-    const reply = await client.SayHelloClientStream(clientIterable());
-    await promise;
     expect(reply.message).toBe("ok");
   });
 
-  test("bidirectional streams work", async () => {
-    async function* clientIterable() {
+  test("Bidi streams work", async () => {
+    const { serverIterable, sendStream } = await client.SayHelloBidiStream();
+
+    const sendMain = async () => {
       let keepGoing = true;
       const startTime = new Date().valueOf();
 
@@ -181,15 +180,17 @@ describe("End to end test", () => {
           keepGoing = false;
         }
 
-        yield {};
+        sendStream.send({});
 
         await sleep0();
       }
-    }
 
-    const serverIterable = await client.SayHelloBidiStream(clientIterable());
+      sendStream.close();
+    };
 
     let numCycles = 0;
+
+    sendMain();
 
     for await (let reply of serverIterable) {
       const message = reply.message;

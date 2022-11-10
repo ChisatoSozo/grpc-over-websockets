@@ -39,20 +39,24 @@ function App() {
       return;
     }
 
-    const clientIterable = (async function* () {
-      for (let i = 0; i < 10; i++) {
-        yield { name, lastName: "lastName" };
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    })();
+    const { serverMessage, sendStream } = client.SayHelloClientStream();
 
-    client.SayHelloClientStream(clientIterable).then((reply) => {
+    serverMessage.then((reply) => {
       const message = reply.message;
       if (!message) {
         return;
       }
       setRepliesClientStream((replies) => [...replies, message]);
     });
+
+    const main = async () => {
+      for (let i = 0; i < 10; i++) {
+        sendStream.send({ name, lastName: "lastName" });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    };
+
+    main();
   };
 
   const sendMessageServerStream = () => {
@@ -80,14 +84,7 @@ function App() {
       return;
     }
 
-    const clientIterable = (async function* () {
-      for (let i = 0; i < 10; i++) {
-        yield { name, lastName: "lastName" };
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    })();
-
-    const serverIterable = client.SayHelloBidiStream(clientIterable);
+    const { serverIterable, sendStream } = client.SayHelloBidiStream();
 
     const main = async () => {
       for await (const reply of serverIterable) {
@@ -98,8 +95,15 @@ function App() {
         setRepliesBidiStream((replies) => [...replies, message]);
       }
     };
+    const main2 = async () => {
+      for (let i = 0; i < 10; i++) {
+        sendStream.send({ name, lastName: "lastName" });
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+    };
 
     main();
+    main2();
   };
 
   return (

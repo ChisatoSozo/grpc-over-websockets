@@ -214,7 +214,7 @@ const compile = async (outFile: string, protoFiles: string[]) => {
 ${js}`.replace(`"use strict";`, "");
     fs.writeFileSync(`${fileRoot}.def.js`, eslintDisabled);
     //remove ts files
-    fs.unlinkSync(`${fileRoot}.def.ts`);
+    //fs.unlinkSync(`${fileRoot}.def.ts`);
   }
 };
 
