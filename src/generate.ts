@@ -115,7 +115,12 @@ function compileJS(fileName: string): void {
   console.log(`Process successful`);
 }
 
-const compile = async (outFile: string, protoFiles: string[]) => {
+const compile = async (
+  outFile: string,
+  protoFiles: string[],
+  client: boolean,
+  server: boolean
+) => {
   const fileRoot = outFile.replace(/\.js$/, "");
   const fileName = path.basename(fileRoot);
 
@@ -139,13 +144,18 @@ const compile = async (outFile: string, protoFiles: string[]) => {
     let outTS = "";
     let messageMetadata = "const messageMetadata = {\n";
 
-    outTS += `import { WebSocket as WebSocketService, WebSocketServer } from "ws";`;
+    if (server) {
+      outTS += `import { WebSocket as WebSocketService, WebSocketServer } from "ws";`;
+    }
+
     for (const module in modules) {
       const capitalizedModule = capitalize(module);
       outTS += `import { ${module} as ${capitalizedModule} } from "./${fileName}.pbjs";`;
     }
 
-    outTS += internalClientTemplate;
+    if (client) {
+      outTS += internalClientTemplate;
+    }
 
     for (const module in modules) {
       const compiledObjects = modules[module].nested;
@@ -190,9 +200,13 @@ const compile = async (outFile: string, protoFiles: string[]) => {
               ImplBody += `${methodName}: (message: AsyncIterable<${capitalizedModule}.I${method.requestType}>) => AsyncIterable<${capitalizedModule}.I${method.responseType}>;\n`;
             }
           }
-          outTS += `export interface I${compiledObjectName}ServiceImpl {${ImplBody}}\n`;
-          outTS += serviceTemplate(compiledObjectName);
-          outTS += clientTemplate(compiledObjectName, methodMetadata);
+          if (server) {
+            outTS += `export interface I${compiledObjectName}ServiceImpl {${ImplBody}}\n`;
+            outTS += serviceTemplate(compiledObjectName);
+          }
+          if (client) {
+            outTS += clientTemplate(compiledObjectName, methodMetadata);
+          }
         }
       }
     }
@@ -214,31 +228,59 @@ const compile = async (outFile: string, protoFiles: string[]) => {
 ${js}`.replace(`"use strict";`, "");
     fs.writeFileSync(`${fileRoot}.def.js`, eslintDisabled);
     //remove ts files
-    //fs.unlinkSync(`${fileRoot}.def.ts`);
+    fs.unlinkSync(`${fileRoot}.def.ts`);
   }
 };
 
 const main = async () => {
   const argv = yargs(hideBin(process.argv))
     .command(
-      "-o <outfile> <proto files...>",
+      "-c <outclientfile> -s <outserverfile> -o <outcombinedfile> <proto files...>",
       "Generate code for grpc-over-websocket"
     )
     .demandCommand(1)
-    .demandOption("o")
     .parse();
 
   //@ts-ignore
-  const outFile = argv.o as string | string[];
+  const outClientFile = argv.c as string | string[] | undefined;
+
+  //@ts-ignore
+  const outServerFile = argv.s as string | string[] | undefined;
+
+  //@ts-ignore
+  const outCombinedFile = argv.o as string | string[] | undefined;
+
   //@ts-ignore
   const protoFiles = argv._ as string[];
 
-  if (Array.isArray(outFile)) {
-    for (const file of outFile) {
-      await compile(file, protoFiles);
+  if (Array.isArray(outClientFile)) {
+    for (const file of outClientFile) {
+      await compile(file, protoFiles, true, false);
     }
   } else {
-    await compile(outFile, protoFiles);
+    if (outClientFile) {
+      await compile(outClientFile, protoFiles, true, false);
+    }
+  }
+
+  if (Array.isArray(outServerFile)) {
+    for (const file of outServerFile) {
+      await compile(file, protoFiles, false, true);
+    }
+  } else {
+    if (outServerFile) {
+      await compile(outServerFile, protoFiles, false, true);
+    }
+  }
+
+  if (Array.isArray(outCombinedFile)) {
+    for (const file of outCombinedFile) {
+      await compile(file, protoFiles, true, true);
+    }
+  } else {
+    if (outCombinedFile) {
+      await compile(outCombinedFile, protoFiles, true, true);
+    }
   }
 };
 

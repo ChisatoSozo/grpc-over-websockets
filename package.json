@@ -1,6 +1,6 @@
 {
   "name": "grpc-over-websocket",
-  "version": "0.0.6",
+  "version": "0.0.11",
   "main": "dist/generate.js",
   "license": "MIT",
   "bin": {
@@ -14,7 +14,7 @@
     "test:generate": "node dist/generate.js -o src/tests/protos/compiled.js src/tests/test.proto",
     "test:jest": "jest",
     "build": "rollup -c --bundleConfigAsCjs",
-    "setup": "npm run build && node dist/generate.js -o examples/react-client/src/client-protos/compiled.js -o examples/server/server-protos/compiled.js examples/protos/example.proto",
+    "setup": "npm run build && node dist/generate.js -c examples/react-client/src/client-protos/compiled.js -s examples/server/server-protos/compiled.js examples/protos/example.proto",
     "push": "npm version patch && npm run build && git push && npm publish"
   },
   "devDependencies": {
