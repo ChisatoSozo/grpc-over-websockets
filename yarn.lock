@@ -2675,6 +2675,11 @@ p-try@^2.0.0:
   resolved "https://registry.yarnpkg.com/p-try/-/p-try-2.2.0.tgz#cb2868540e313d61de58fafbe35ce9004d5540e6"
   integrity sha512-R4nPAVTAU0B9D35/Gk3uJf/7XYbQcyohSKdvAxIRSNghFl4e71hVoGnBNQz9cWaXxO2I10KTC+3jMdvvoKw6dQ==
 
+parse-filename@^0.0.0:
+  version "0.0.0"
+  resolved "https://registry.yarnpkg.com/parse-filename/-/parse-filename-0.0.0.tgz#549913311c1d13620d3175ce653d98cd6d2bf27d"
+  integrity sha512-JKzFJjl4JmPSzbsNN7wxzkLm969GjXqTARi8FhlDlsyFI30I3W6PlRA4a3gGTT4dug3ltSVzoD57GKeM6gZzxQ==
+
 parse-json@^4.0.0:
   version "4.0.0"
   resolved "https://registry.yarnpkg.com/parse-json/-/parse-json-4.0.0.tgz#be35f5425be1f7f6c747184f98a788cb99477ee0"

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from "fs";
+import path from "path";
 import { pbjs, pbts } from "protobufjs-cli";
 import * as ts from "typescript";
 import yargs from "yargs";
@@ -116,6 +117,7 @@ function compileJS(fileName: string): void {
 
 const compile = async (outFile: string, protoFiles: string[]) => {
   const fileRoot = outFile.replace(/\.js$/, "");
+  const fileName = path.basename(fileRoot);
 
   for (const protoFile of protoFiles) {
     console.log(`Processing ${protoFile}`);
@@ -128,7 +130,9 @@ const compile = async (outFile: string, protoFiles: string[]) => {
       `${fileRoot}.pbjs.js`,
       protoFile,
     ]);
+    console.log(`Generated ${fileRoot}.pbjs.js`);
     await pbtsPromise(["-o", `${fileRoot}.pbjs.d.ts`, `${fileRoot}.pbjs.js`]);
+    console.log(`Generated ${fileRoot}.pbjs.d.ts`);
     const result = JSON.parse(await pbjsPromise(["-t", "json", protoFile]));
     const modules = result.nested;
 
@@ -138,7 +142,7 @@ const compile = async (outFile: string, protoFiles: string[]) => {
     outTS += `import { WebSocket as WebSocketService, WebSocketServer } from "ws";`;
     for (const module in modules) {
       const capitalizedModule = capitalize(module);
-      outTS += `import { ${module} as ${capitalizedModule} } from "./compiled.pbjs";`;
+      outTS += `import { ${module} as ${capitalizedModule} } from "./${fileName}.pbjs";`;
     }
 
     outTS += internalClientTemplate;
@@ -217,7 +221,7 @@ ${js}`.replace(`"use strict";`, "");
 const main = async () => {
   const argv = yargs(hideBin(process.argv))
     .command(
-      "generate -o <outfile> <proto files...>",
+      "-o <outfile> <proto files...>",
       "Generate code for grpc-over-websocket"
     )
     .demandCommand(1)

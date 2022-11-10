@@ -30,6 +30,7 @@ export const serviceTemplate = (
         console.log(\`Decoded message from client\`, message);
       }
 
+      //@ts-ignore
       const replyObject = (this.impl[method] as (message: any) => any)(message);
 
       const reply =
@@ -55,6 +56,7 @@ export const serviceTemplate = (
       const message = messageMetadata[method].MessageClass.decode(binary);
 
       const replyObject = (
+        //@ts-ignore
         this.impl[method] as (message: any) => AsyncIterable<any>
       )(message) as AsyncIterable<any>;
 
@@ -112,6 +114,7 @@ export const serviceTemplate = (
       }
     }
 
+    //@ts-ignore
     const replyObject = this.impl[method](asyncIterable()) as any;
     const reply =
       messageMetadata[method].ReplyClass.encode(replyObject).finish();
@@ -158,6 +161,7 @@ export const serviceTemplate = (
       }
     }
 
+    //@ts-ignore
     const replyObject = this.impl[method](
       asyncIterable()
     ) as AsyncIterable<any>;
@@ -326,7 +330,7 @@ export const internalClientTemplate = `class InternalClientStreaming {
   ): AsyncIterable<{}> {
     this.sendWhenSocketReady(method, request);
 
-    let serverStreamResolve: (value: {}) => void;
+    let serverStreamResolve: (value: {} | undefined) => void;
     let serverStreamReject: (reason?: any) => void;
 
     let serverStreamPromise = new Promise<{} | undefined>((resolve, reject) => {
@@ -409,7 +413,7 @@ export const internalClientTemplate = `class InternalClientStreaming {
   ) {
     this.startAsyncIterableLoopWhenSocketReady(method, clientIterable);
 
-    let bidiStreamResolve: (value: {}) => void;
+    let bidiStreamResolve: (value: {} | undefined) => void;
     let bidiStreamReject: (reason?: any) => void;
 
     let bidiStreamPromise = new Promise<{} | undefined>((resolve, reject) => {
@@ -438,7 +442,7 @@ export const internalClientTemplate = `class InternalClientStreaming {
           return;
         }
         yield result;
-        bidiStreamPromise = new Promise<{}>((resolve, reject) => {
+        bidiStreamPromise = new Promise<{} | undefined>((resolve, reject) => {
           bidiStreamResolve = resolve;
           bidiStreamReject = reject;
         });

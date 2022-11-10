@@ -7,5 +7,10 @@ export default {
     dir: "dist",
     format: "cjs",
   },
-  plugins: [typescript(), shebang({ shebang: "#!/usr/bin/env node" })],
+  plugins: [
+    typescript({
+      exclude: ["**/tests", "**/*.test.ts"],
+    }),
+    shebang({ shebang: "#!/usr/bin/env node" }),
+  ],
 };
