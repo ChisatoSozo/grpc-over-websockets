@@ -1,6 +1,6 @@
 {
   "name": "grpc-over-websocket",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "main": "dist/generate.js",
   "license": "MIT",
   "bin": {
